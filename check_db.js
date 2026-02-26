@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-const MONGO_URI = 'mongodb+srv://OFF_PAY:qrpay123@prem-cluster24.w1ozvvr.mongodb.net/subscription_db?retryWrites=true&w=majority&appName=Prem-Cluster24';
+const MONGO_URI = 'Your_mongo_url';
 
 const check = async () => {
     try {
