@@ -3,7 +3,8 @@ import {
     MagnifyingGlassIcon,
     ArrowDownTrayIcon,
     PlusIcon,
-    CreditCardIcon
+    CreditCardIcon,
+    ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import api from '../services/api';
 import Papa from 'papaparse';
@@ -18,6 +19,10 @@ const Payments = () => {
     const [summary, setSummary] = useState({ total: 0, pendingCount: 0, overdueCount: 0, pendingAmount: 0, overdueAmount: 0 });
     const [filterStatus, setFilterStatus] = useState('All');
     const [searchTerm, setSearchTerm] = useState('');
+
+    // Renewal Modal state
+    const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+    const [renewMember, setRenewMember] = useState(null);
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -87,6 +92,59 @@ const Payments = () => {
     const handleViewReceipt = (payment) => {
         setSelectedPayment(payment);
         setIsReceiptOpen(true);
+    };
+
+    const handleRenewPayment = async () => {
+        if (!renewMember || !renewMember.currentPlan) return;
+        const plan = renewMember.currentPlan;
+
+        try {
+            const orderRes = await api.post('/payments/razorpay/order', {
+                amount: plan.price,
+                currency: 'USD'
+            });
+
+            const { id: order_id, key_id, amount, currency } = orderRes.data;
+
+            const options = {
+                key: key_id,
+                amount: amount,
+                currency: currency,
+                name: "MemberHub Premium",
+                description: `Renewal for ${plan.name}`,
+                order_id: order_id,
+                handler: async function (response) {
+                    try {
+                        await api.post('/payments/razorpay/verify', {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                            memberId: renewMember._id,
+                            planId: plan._id,
+                            amount: plan.price
+                        });
+
+                        alert('Renewal successful!');
+                        fetchData();
+                        setIsRenewModalOpen(false);
+                    } catch (err) {
+                        alert('Verification failed: ' + (err.response?.data?.message || err.message));
+                    }
+                },
+                prefill: {
+                    name: renewMember.personalInfo.firstName + ' ' + renewMember.personalInfo.lastName,
+                    email: renewMember.email,
+                },
+                theme: {
+                    color: "#6366f1",
+                },
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+        } catch (err) {
+            alert('Razorpay initiation failed: ' + (err.response?.data?.message || err.message));
+        }
     };
 
     const handleRazorpayPayment = async () => {
@@ -342,12 +400,26 @@ const Payments = () => {
                                             {new Date(txn.paymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </td>
                                         <td className="px-8 py-6 text-right">
-                                            <button
-                                                onClick={() => handleViewReceipt(txn)}
-                                                className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline hover:text-indigo-800 transition-colors"
-                                            >
-                                                Generate Receipt
-                                            </button>
+                                            <div className="flex justify-end items-center space-x-3">
+                                                {txn.member && (txn.member.status !== 'Active') && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setRenewMember(txn.member);
+                                                            setIsRenewModalOpen(true);
+                                                        }}
+                                                        className="p-2 text-rose-500 hover:text-rose-600 transition-colors bg-rose-50 rounded-lg border border-rose-100"
+                                                        title="Process Renewal"
+                                                    >
+                                                        <CreditCardIcon className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => handleViewReceipt(txn)}
+                                                    className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline hover:text-indigo-800 transition-colors"
+                                                >
+                                                    Generate Receipt
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 )) : (
@@ -470,6 +542,41 @@ const Payments = () => {
                 onClose={() => setIsReceiptOpen(false)}
                 payment={selectedPayment}
             />
+
+            {/* Renew Modal */}
+            <Modal
+                isOpen={isRenewModalOpen}
+                onClose={() => setIsRenewModalOpen(false)}
+                title="Process Renewal"
+            >
+                <div className="space-y-6">
+                    <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 text-center">
+                        <p className="text-[11px] font-black text-indigo-900 uppercase tracking-widest mb-1">Renewal For</p>
+                        <p className="text-lg font-black text-indigo-700">
+                            {renewMember?.personalInfo?.firstName} {renewMember?.personalInfo?.lastName}
+                        </p>
+                        <p className="text-xs font-bold text-indigo-600 mt-2">
+                            {renewMember?.currentPlan?.name} 〈 ${renewMember?.currentPlan?.price} 〉
+                        </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 flex items-start gap-4 rounded-2xl border border-slate-200">
+                        <ExclamationTriangleIcon className="w-6 h-6 text-slate-400 shrink-0" />
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                            A secure checkout window provided by Razorpay will open. After a successful payment, the subscription will auto-renew.
+                        </p>
+                    </div>
+
+                    <div className="flex space-x-3 pt-6 border-t border-slate-100">
+                        <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsRenewModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleRenewPayment} type="button" className="flex-1">
+                            Proceed to Gateway
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

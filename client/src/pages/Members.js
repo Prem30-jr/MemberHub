@@ -37,7 +37,8 @@ const Members = () => {
         email: '',
         phone: '',
         planId: '',
-        status: 'Active'
+        status: 'Active',
+        paymentMethod: 'manual'
     });
 
     // AI Message states
@@ -60,7 +61,7 @@ const Members = () => {
                 api.get('/members'),
                 api.get('/plans')
             ]);
-            setMembers(membersRes.data);
+            setMembers(membersRes.data.filter(m => m.role === 'user'));
             setPlans(plansRes.data);
 
             // Auto-select first plan if none selected
@@ -72,7 +73,7 @@ const Members = () => {
         } finally {
             setLoading(false);
         }
-    }, []); // Removed formData.planId dependency to prevent loop
+    }, [formData.planId]);
 
     useEffect(() => {
         fetchData();
@@ -82,6 +83,56 @@ const Members = () => {
         script.async = true;
         document.body.appendChild(script);
     }, [fetchData]);
+
+    const handleRazorpayOnboarding = async (resMember, plan) => {
+        try {
+            const orderRes = await api.post('/payments/razorpay/order', {
+                amount: plan.price,
+                currency: 'USD'
+            });
+
+            const { id: order_id, key_id, amount, currency } = orderRes.data;
+
+            const options = {
+                key: key_id,
+                amount: amount,
+                currency: currency,
+                name: "MemberHub Premium",
+                description: `Initial Payment for ${plan.name}`,
+                order_id: order_id,
+                handler: async function (response) {
+                    try {
+                        await api.post('/payments/razorpay/verify', {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                            memberId: resMember._id,
+                            planId: plan._id,
+                            amount: plan.price
+                        });
+
+                        alert('Onboarding and Payment successful!');
+                        await fetchData();
+                        setIsModalOpen(false);
+                    } catch (err) {
+                        alert('Verification failed: ' + (err.response?.data?.message || err.message));
+                    }
+                },
+                prefill: {
+                    name: resMember.personalInfo.firstName + ' ' + resMember.personalInfo.lastName,
+                    email: resMember.email,
+                },
+                theme: {
+                    color: "#6366f1",
+                },
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+        } catch (err) {
+            alert('Razorpay initiation failed: ' + (err.response?.data?.message || err.message));
+        }
+    };
 
     const handleRenewPayment = async () => {
         if (!renewMember || !renewMember.currentPlan) return;
@@ -115,7 +166,7 @@ const Members = () => {
                             amount: plan.price
                         });
 
-                        // Trigger AI Recalculation by fetching the member data which triggers the hooks in backend
+                        // Trigger AI Recalculation
                         await api.get(`/members/${renewMember._id}`);
 
                         alert('Renewal successful!');
@@ -151,7 +202,8 @@ const Members = () => {
                 email: member.email,
                 phone: member.personalInfo.phone || '',
                 planId: member.currentPlan?._id || plans[0]?._id || '',
-                status: member.status
+                status: member.status,
+                paymentMethod: 'manual'
             });
         } else {
             setCurrentMember(null);
@@ -162,7 +214,8 @@ const Members = () => {
                 email: '',
                 phone: '',
                 planId: plans[0]?._id || '',
-                status: 'Active'
+                status: 'Active',
+                paymentMethod: 'manual'
             });
         }
         setIsModalOpen(true);
@@ -174,7 +227,7 @@ const Members = () => {
         try {
             const res = await api.post(`/members/${currentMember._id}/generate-message`);
             setSmartMessage(res.data.content);
-            fetchData(); // Refresh to update member data in the list
+            fetchData();
         } catch (error) {
             console.error('Error generating message:', error);
             alert('Failed to generate smart message.');
@@ -198,7 +251,6 @@ const Members = () => {
     };
 
     const handleViewReceipt = (payment) => {
-        // Hydrate payment with member data for the receipt
         const fullPayment = {
             ...payment,
             member: currentMember
@@ -230,18 +282,24 @@ const Members = () => {
                 });
 
                 const selectedPlan = plans.find(p => p._id === formData.planId);
-                if (selectedPlan) {
+
+                if (formData.paymentMethod === 'razorpay') {
+                    await handleRazorpayOnboarding(res.data, selectedPlan);
+                    return;
+                } else if (selectedPlan) {
                     await api.post('/payments', {
                         memberId: res.data._id,
                         planId: formData.planId,
                         amount: selectedPlan.price,
-                        transactionId: `Initial Registration_${Date.now()}`,
-                        status: 'Paid'
+                        transactionId: `Manual Onboarding_${Date.now()}`,
+                        status: 'Paid',
+                        paymentMethod: 'manual'
                     });
                 }
             }
             await fetchData();
             setIsModalOpen(false);
+            if (!currentMember) alert('Member Onboarded Successfully');
         } catch (err) {
             console.error('Submit error:', err);
             const errorMsg = err.response?.data?.message || err.message || 'Failed to save member';
@@ -272,12 +330,11 @@ const Members = () => {
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = `members_ledger_${new Date().toLocaleDateString()}.csv`;
+        link.download = `members_export_${new Date().toLocaleDateString()}.csv`;
         link.click();
     };
 
     const filteredMembers = members.filter(m => {
-        if (m.role !== 'user') return false;
         const matchesSearch = m.personalInfo.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             m.personalInfo.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             m.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -293,10 +350,13 @@ const Members = () => {
     };
 
     const expiringMembers = members.filter(m => {
-        if (m.role !== 'user') return false;
         const days = m.endDate ? getDaysRemaining(m.endDate) : null;
-        return days !== null && days <= 7 && days >= -30;
-    }).sort((a, b) => getDaysRemaining(a.endDate) - getDaysRemaining(b.endDate));
+        return (days !== null && days <= 7 && days >= -30) || (m.status !== 'Active');
+    }).sort((a, b) => {
+        const daysA = a.endDate ? getDaysRemaining(a.endDate) : 999;
+        const daysB = b.endDate ? getDaysRemaining(b.endDate) : 999;
+        return daysA - daysB;
+    });
 
     return (
         <div className="space-y-6 pb-12">
@@ -322,7 +382,7 @@ const Members = () => {
                     <div className="p-6 border-b border-rose-100/50 bg-rose-50 flex items-center gap-3">
                         <ExclamationTriangleIcon className="w-6 h-6 text-rose-500" />
                         <div>
-                            <h4 className="text-lg font-black text-rose-900 tracking-tight">Expiring Soon</h4>
+                            <h4 className="text-lg font-black text-rose-900 tracking-tight">Expiring or Suspended</h4>
                             <p className="text-xs text-rose-600 font-bold uppercase tracking-widest">Action Required for {expiringMembers.length} Members</p>
                         </div>
                     </div>
@@ -335,12 +395,15 @@ const Members = () => {
                                     <div key={m._id} className="bg-white p-5 rounded-2xl border border-rose-100 shadow-sm flex flex-col justify-between">
                                         <div className="mb-4">
                                             <p className="font-black text-slate-900 text-lg leading-tight">{m.personalInfo.firstName} {m.personalInfo.lastName}</p>
-                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{m.currentPlan?.name || 'N/A'}</p>
+                                            <div className="flex justify-between items-center mt-1">
+                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{m.currentPlan?.name || 'N/A'}</p>
+                                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-lg uppercase ${m.status === 'Suspended' ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>{m.status}</span>
+                                            </div>
                                         </div>
                                         <div className="mb-4 space-y-1">
-                                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Expires: {new Date(m.endDate).toLocaleDateString()}</p>
-                                            <p className={`font-black text-sm ${isExpired ? 'text-rose-600' : 'text-amber-500'}`}>
-                                                {isExpired ? `Expired ${Math.abs(days)} days ago` : `${days} days remaining`}
+                                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Expires: {m.endDate ? new Date(m.endDate).toLocaleDateString() : 'N/A'}</p>
+                                            <p className={`font-black text-sm ${isExpired || m.status !== 'Active' ? 'text-rose-600' : 'text-amber-500'}`}>
+                                                {m.status === 'Suspended' ? 'Account Suspended' : (isExpired ? `Expired ${Math.abs(days)} days ago` : `${days} days remaining`)}
                                             </p>
                                         </div>
                                         <Button
@@ -460,13 +523,25 @@ const Members = () => {
                                         </td>
                                         <td className="px-8 py-6 text-right">
                                             <div className="flex justify-end space-x-2">
-                                                <button onClick={() => handleViewHistory(member)} className="p-2 text-slate-400 hover:text-emerald-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100 hover:border-emerald-200" title="Financial Ledger">
-                                                    <CreditCardIcon className="w-5 h-5" />
+                                                {(member.status !== 'Active' || (member.endDate && getDaysRemaining(member.endDate) <= 7)) && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setRenewMember(member);
+                                                            setIsRenewModalOpen(true);
+                                                        }}
+                                                        className="p-2 text-rose-500 hover:text-rose-600 transition-colors bg-rose-50 rounded-xl shadow-sm border border-rose-100"
+                                                        title="Renew Now"
+                                                    >
+                                                        <CreditCardIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                                <button onClick={() => handleViewHistory(member)} className="p-2 text-slate-400 hover:text-emerald-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="Financial Ledger">
+                                                    <PlusIcon className="w-5 h-5 text-emerald-500" />
                                                 </button>
-                                                <button onClick={() => handleOpenModal(member)} className="p-2 text-slate-400 hover:text-primary transition-colors bg-white rounded-xl shadow-sm border border-slate-100 hover:border-primary/20" title="Edit Profile">
+                                                <button onClick={() => handleOpenModal(member)} className="p-2 text-slate-400 hover:text-primary transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="Edit Profile">
                                                     <PencilSquareIcon className="w-5 h-5" />
                                                 </button>
-                                                <button onClick={() => handleDelete(member._id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100 hover:border-rose-200" title="Terminate Account">
+                                                <button onClick={() => handleDelete(member._id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="Terminate Account">
                                                     <TrashIcon className="w-5 h-5" />
                                                 </button>
                                             </div>
@@ -474,7 +549,7 @@ const Members = () => {
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan="5" className="px-8 py-20 text-center text-slate-400 text-xs font-black uppercase tracking-[0.2em] italic">
+                                        <td colSpan="7" className="px-8 py-20 text-center text-slate-400 text-xs font-black uppercase tracking-[0.2em] italic">
                                             No matches found in directory.
                                         </td>
                                     </tr>
@@ -485,7 +560,7 @@ const Members = () => {
                 </div>
             </div>
 
-            {/* Member Onboarding/Edit Modal */}
+            {/* Main Modal */}
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -496,21 +571,15 @@ const Members = () => {
                         <div className="p-6 rounded-[2rem] bg-indigo-50 border border-indigo-100 space-y-4">
                             <div className="flex items-center justify-between">
                                 <h5 className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Smart Subscription Intel</h5>
-                                <span className="text-[10px] font-black px-3 py-1 bg-indigo-600 text-white rounded-lg uppercase tracking-wider">AI Recommended</span>
+                                <span className="text-[10px] font-black px-3 py-1 bg-indigo-600 text-white rounded-lg">AI Recommended</span>
                             </div>
                             <div className="flex items-start space-x-4">
-                                <div className="p-3 bg-white rounded-2xl shadow-sm border border-indigo-100 transition-transform hover:scale-110">
+                                <div className="p-3 bg-white rounded-2xl shadow-sm">
                                     <SparklesIcon className="w-6 h-6 text-indigo-500" />
                                 </div>
                                 <div className="flex-1">
                                     <p className="text-sm font-black text-slate-800 uppercase tracking-tight mb-1">Suggest: {currentMember.recommendation.plan.name}</p>
-                                    <p className="text-xs text-slate-500 font-medium leading-relaxed italic">"{currentMember.recommendation.reason}"</p>
-                                    <div className="mt-4 flex items-center space-x-3">
-                                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden shadow-inner">
-                                            <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${currentMember.recommendation.confidenceScore * 100}%` }}></div>
-                                        </div>
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{(currentMember.recommendation.confidenceScore * 100).toFixed(0)}% Confidence</span>
-                                    </div>
+                                    <p className="text-xs text-slate-500 font-medium italic">"{currentMember.recommendation.reason}"</p>
                                 </div>
                             </div>
                         </div>
@@ -552,11 +621,6 @@ const Members = () => {
                                     <p className="text-xs text-slate-500 font-medium leading-relaxed italic">
                                         Reasons: {currentMember.churnRisk.reasons?.join(', ') || 'None'}
                                     </p>
-                                    {currentMember.churnRisk.level === 'HIGH' && (
-                                        <p className="mt-2 text-xs font-bold text-rose-600 bg-rose-100/50 p-2 rounded-lg inline-block">
-                                            ⚠️ This member is likely to stop renewing.
-                                        </p>
-                                    )}
                                 </div>
                             </div>
 
@@ -625,6 +689,37 @@ const Members = () => {
                             value={formData.phone}
                             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         />
+
+                        {!currentMember && (
+                            <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-indigo-100 rounded-xl text-indigo-600">
+                                        <CreditCardIcon className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-black text-indigo-900 uppercase tracking-widest leading-none">Initial Payment</p>
+                                        <p className="text-[10px] text-indigo-700 font-medium mt-1">Select onboarding method</p>
+                                    </div>
+                                </div>
+                                <div className="flex bg-white p-1 rounded-xl border border-indigo-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, paymentMethod: 'manual' })}
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${formData.paymentMethod === 'manual' ? 'bg-indigo-600 text-white' : 'text-indigo-400'}`}
+                                    >
+                                        Manual
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, paymentMethod: 'razorpay' })}
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${formData.paymentMethod === 'razorpay' ? 'bg-indigo-600 text-white' : 'text-indigo-400'}`}
+                                    >
+                                        Razorpay
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-2 gap-4">
                             <Select
                                 label="Service Tier Assignment"
@@ -633,7 +728,7 @@ const Members = () => {
                                 onChange={(e) => setFormData({ ...formData, planId: e.target.value })}
                                 options={plans.length > 0
                                     ? plans.map(p => ({ value: p._id, label: `${p.name} ($${p.price})` }))
-                                    : [{ value: '', label: 'No active plans found' }]
+                                    : [{ value: '', label: 'No plans found' }]
                                 }
                             />
                             <Select
@@ -647,7 +742,8 @@ const Members = () => {
                                 ]}
                             />
                         </div>
-                        <div className="flex space-x-3 pt-8 border-t border-slate-100 mt-6">
+
+                        <div className="flex space-x-3 pt-6 border-t border-slate-100">
                             <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
                                 Abort
                             </Button>
@@ -659,7 +755,7 @@ const Members = () => {
                 </div>
             </Modal>
 
-            {/* Payment History Modal */}
+            {/* History Modal */}
             <Modal
                 isOpen={isHistoryOpen}
                 onClose={() => setIsHistoryOpen(false)}
@@ -667,11 +763,11 @@ const Members = () => {
             >
                 <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                     {historyLoading ? (
-                        <p className="text-center py-20 text-slate-400 font-black text-xs uppercase animate-pulse">Querying ledger records...</p>
+                        <p className="text-center py-20 text-slate-400 uppercase font-black text-xs animate-pulse tracking-widest">Querying ledger records...</p>
                     ) : paymentHistory.length > 0 ? (
                         <div className="divide-y divide-slate-100">
                             {paymentHistory.map((pay) => (
-                                <div key={pay._id} className="py-5 flex justify-between items-center group hover:bg-slate-50/50 px-2 rounded-2xl transition-all">
+                                <div key={pay._id} className="py-4 flex justify-between items-center group hover:bg-slate-50/50 px-2 rounded-xl transition-all">
                                     <div className="space-y-1">
                                         <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{pay.plan?.name || 'Custom Offset'}</p>
                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
@@ -683,10 +779,7 @@ const Members = () => {
                                             <p className="text-sm font-black text-slate-900">${pay.amount.toFixed(2)}</p>
                                             <p className={`text-[9px] font-black uppercase tracking-widest ${pay.status === 'Paid' ? 'text-emerald-500' : 'text-amber-500'}`}>{pay.status}</p>
                                         </div>
-                                        <button
-                                            onClick={() => handleViewReceipt(pay)}
-                                            className="p-2 text-slate-300 hover:text-primary transition-colors"
-                                        >
+                                        <button onClick={() => handleViewReceipt(pay)} className="p-2 text-slate-300 hover:text-primary transition-colors">
                                             <ChevronDoubleRightIcon className="w-5 h-5" />
                                         </button>
                                     </div>
@@ -694,7 +787,7 @@ const Members = () => {
                             ))}
                         </div>
                     ) : (
-                        <p className="text-center py-20 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em]">No financial traffic recorded for this identity.</p>
+                        <p className="text-center py-20 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em]">No financial traffic recorded.</p>
                     )}
                 </div>
                 <div className="pt-6 border-t border-slate-100 mt-6">
@@ -702,14 +795,7 @@ const Members = () => {
                 </div>
             </Modal>
 
-            {/* Receipt Modal */}
-            <ReceiptModal
-                isOpen={isReceiptOpen}
-                onClose={() => setIsReceiptOpen(false)}
-                payment={selectedPayment}
-            />
-
-            {/* Renew Modal */}
+            {/* Renewal Modal */}
             <Modal
                 isOpen={isRenewModalOpen}
                 onClose={() => setIsRenewModalOpen(false)}
@@ -721,31 +807,29 @@ const Members = () => {
                         <p className="text-lg font-black text-indigo-700">
                             {renewMember?.personalInfo?.firstName} {renewMember?.personalInfo?.lastName}
                         </p>
-                        <p className="text-sm font-medium text-indigo-600 mt-2">
-                            Plan: <span className="font-bold">{renewMember?.currentPlan?.name}</span>
-                        </p>
-                        <p className="text-sm font-medium text-indigo-600">
-                            Amount: <span className="font-bold">${renewMember?.currentPlan?.price}</span>
+                        <p className="text-xs font-bold text-indigo-600 mt-2 uppercase tracking-tight">
+                            {renewMember?.currentPlan?.name} 〈 ${renewMember?.currentPlan?.price} 〉
                         </p>
                     </div>
-
                     <div className="p-4 bg-slate-50 flex items-start gap-4 rounded-2xl border border-slate-200">
                         <ExclamationTriangleIcon className="w-6 h-6 text-slate-400 shrink-0" />
                         <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                            A secure checkout window provided by Razorpay will open. After a successful payment, the subscription will auto-renew and trigger AI metrics recalculation.
+                            A secure checkout window provided by Razorpay will open. After a successful payment, the subscription will auto-renew.
                         </p>
                     </div>
-
                     <div className="flex space-x-3 pt-6 border-t border-slate-100">
-                        <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsRenewModalOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleRenewPayment} type="button" className="flex-1">
-                            Proceed to Gateway
-                        </Button>
+                        <Button variant="secondary" className="flex-1" onClick={() => setIsRenewModalOpen(false)}>Cancel</Button>
+                        <Button onClick={handleRenewPayment} className="flex-1">Proceed to Gateway</Button>
                     </div>
                 </div>
             </Modal>
+
+            {/* Receipt Modal */}
+            <ReceiptModal
+                isOpen={isReceiptOpen}
+                onClose={() => setIsReceiptOpen(false)}
+                payment={selectedPayment}
+            />
         </div>
     );
 };
