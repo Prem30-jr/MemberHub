@@ -16,8 +16,12 @@ const memberSchema = new mongoose.Schema({
     },
     firebaseUid: {
         type: String,
-        required: true,
-        unique: true
+        unique: true,
+        sparse: true // Allows null/missing for staff
+    },
+    password: {
+        type: String,
+        select: false // Don't return by default
     },
     role: {
         type: String,
@@ -71,6 +75,18 @@ const memberSchema = new mongoose.Schema({
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
+});
+
+// Hashing staff passwords before save
+memberSchema.pre('save', async function () {
+    if (!this.isModified('password') || !this.password) return;
+    try {
+        const bcrypt = require('bcryptjs');
+        const salt = await bcrypt.genSalt(10);
+        this.password = await bcrypt.hash(this.password, salt);
+    } catch (err) {
+        throw err;
+    }
 });
 
 // Virtual for payment history to avoid double-storing

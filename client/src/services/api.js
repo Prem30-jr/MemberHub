@@ -8,13 +8,20 @@ const api = axios.create({
     },
 });
 
-// Add a request interceptor to include the Firebase token
+// Add a request interceptor to include the auth token
 api.interceptors.request.use(
     async (config) => {
+        // 1. Try Firebase Token
         const user = auth.currentUser;
         if (user) {
             const token = await user.getIdToken();
             config.headers.Authorization = `Bearer ${token}`;
+        } else {
+            // 2. Try Manual Token (for staff)
+            const manualToken = localStorage.getItem('staffToken');
+            if (manualToken) {
+                config.headers.Authorization = `Bearer ${manualToken}`;
+            }
         }
         return config;
     },

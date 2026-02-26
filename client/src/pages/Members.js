@@ -9,15 +9,18 @@ import {
     ChevronDoubleRightIcon,
     SparklesIcon,
     ChatBubbleLeftRightIcon,
-    ExclamationTriangleIcon
+    ExclamationTriangleIcon,
+    UserIcon
 } from '@heroicons/react/24/outline';
 import api from '../services/api';
 import Papa from 'papaparse';
+import { useAuth } from '../context/AuthContext';
 import { Button, Input, Modal, Select } from '../components/UI';
 import ReceiptModal from '../components/ReceiptModal';
 
 
 const Members = () => {
+    const { role } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [members, setMembers] = useState([]);
     const [plans, setPlans] = useState([]);
@@ -370,10 +373,12 @@ const Members = () => {
                         <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
                         Export Data
                     </Button>
-                    <Button onClick={() => handleOpenModal()}>
-                        <PlusIcon className="w-5 h-5 mr-2" />
-                        Onboard Member
-                    </Button>
+                    {role === 'staff' && (
+                        <Button onClick={() => handleOpenModal()}>
+                            <PlusIcon className="w-5 h-5 mr-2" />
+                            Onboard Member
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -523,7 +528,7 @@ const Members = () => {
                                         </td>
                                         <td className="px-8 py-6 text-right">
                                             <div className="flex justify-end space-x-2">
-                                                {(member.status !== 'Active' || (member.endDate && getDaysRemaining(member.endDate) <= 7)) && (
+                                                {role === 'staff' && (member.status !== 'Active' || (member.endDate && getDaysRemaining(member.endDate) <= 7)) && (
                                                     <button
                                                         onClick={() => {
                                                             setRenewMember(member);
@@ -538,12 +543,20 @@ const Members = () => {
                                                 <button onClick={() => handleViewHistory(member)} className="p-2 text-slate-400 hover:text-emerald-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="Financial Ledger">
                                                     <PlusIcon className="w-5 h-5 text-emerald-500" />
                                                 </button>
-                                                <button onClick={() => handleOpenModal(member)} className="p-2 text-slate-400 hover:text-primary transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="Edit Profile">
-                                                    <PencilSquareIcon className="w-5 h-5" />
-                                                </button>
-                                                <button onClick={() => handleDelete(member._id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="Terminate Account">
-                                                    <TrashIcon className="w-5 h-5" />
-                                                </button>
+                                                {role === 'staff' ? (
+                                                    <button onClick={() => handleOpenModal(member)} className="p-2 text-slate-400 hover:text-primary transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="Edit Profile">
+                                                        <PencilSquareIcon className="w-5 h-5" />
+                                                    </button>
+                                                ) : (
+                                                    <button onClick={() => handleOpenModal(member)} className="p-2 text-slate-400 hover:text-indigo-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="View Details">
+                                                        <UserIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                                {role === 'staff' && (
+                                                    <button onClick={() => handleDelete(member._id)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100" title="Terminate Account">
+                                                        <TrashIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -627,15 +640,17 @@ const Members = () => {
                             <div className="mt-4 pt-4 border-t border-slate-200/50 space-y-4">
                                 <div className="flex items-center justify-between">
                                     <h6 className="text-xs font-bold text-slate-700">AI Smart Reminder</h6>
-                                    <button
-                                        type="button"
-                                        onClick={handleGenerateMessage}
-                                        disabled={isGeneratingMessage}
-                                        className="flex items-center bg-white text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors disabled:opacity-50"
-                                    >
-                                        <ChatBubbleLeftRightIcon className="w-4 h-4 mr-2" />
-                                        {isGeneratingMessage ? 'Generating...' : 'Generate Smart Reminder'}
-                                    </button>
+                                    {role === 'staff' && (
+                                        <button
+                                            type="button"
+                                            onClick={handleGenerateMessage}
+                                            disabled={isGeneratingMessage}
+                                            className="flex items-center bg-white text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 text-[10px] font-black uppercase tracking-widest hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                                        >
+                                            <ChatBubbleLeftRightIcon className="w-4 h-4 mr-2" />
+                                            {isGeneratingMessage ? 'Generating...' : 'Generate Smart Reminder'}
+                                        </button>
+                                    )}
                                 </div>
 
                                 {smartMessage && (
@@ -665,12 +680,14 @@ const Members = () => {
                             <Input
                                 label="Legal First Name"
                                 required
+                                disabled={role !== 'staff'}
                                 value={formData.firstName}
                                 onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                             />
                             <Input
                                 label="Legal Last Name"
                                 required
+                                disabled={role !== 'staff'}
                                 value={formData.lastName}
                                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                             />
@@ -679,13 +696,14 @@ const Members = () => {
                             label="Electronic Mail Address"
                             type="email"
                             required
-                            disabled={!!currentMember}
+                            disabled={!!currentMember || role !== 'staff'}
                             value={formData.email}
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         />
                         <Input
                             label="Primary Phone Interface"
                             placeholder="+1 (000) 000-0000"
+                            disabled={role !== 'staff'}
                             value={formData.phone}
                             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         />
@@ -724,6 +742,7 @@ const Members = () => {
                             <Select
                                 label="Service Tier Assignment"
                                 required
+                                disabled={role !== 'staff'}
                                 value={formData.planId}
                                 onChange={(e) => setFormData({ ...formData, planId: e.target.value })}
                                 options={plans.length > 0
@@ -733,6 +752,7 @@ const Members = () => {
                             />
                             <Select
                                 label="Operational State"
+                                disabled={role !== 'staff'}
                                 value={formData.status}
                                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                                 options={[
@@ -743,14 +763,16 @@ const Members = () => {
                             />
                         </div>
 
-                        <div className="flex space-x-3 pt-6 border-t border-slate-100">
-                            <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
-                                Abort
-                            </Button>
-                            <Button type="submit" className="flex-1">
-                                {currentMember ? 'Apply Updates' : 'Commit Onboarding'}
-                            </Button>
-                        </div>
+                        {role === 'staff' && (
+                            <div className="flex space-x-3 pt-6 border-t border-slate-100">
+                                <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button type="submit" className="flex-1">
+                                    {currentMember ? 'Apply Updates' : 'Confirm Onboarding'}
+                                </Button>
+                            </div>
+                        )}
                     </form>
                 </div>
             </Modal>

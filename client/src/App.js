@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 
@@ -11,6 +11,15 @@ import Members from './pages/Members';
 import Plans from './pages/Plans';
 import Payments from './pages/Payments';
 import Notifications from './pages/Notifications';
+import ManageStaff from './pages/ManageStaff';
+
+const DashboardRedirect = () => {
+  const { role, loading } = useAuth();
+  if (loading) return null;
+  if (role === 'admin') return <Navigate to="/dashboard/admin" />;
+  if (role === 'staff') return <Navigate to="/dashboard/staff" />;
+  return <Navigate to="/dashboard/user" />;
+};
 
 function App() {
   return (
@@ -23,8 +32,52 @@ function App() {
             path="/"
             element={
               <ProtectedRoute>
+                <DashboardRedirect />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/dashboard/admin"
+            element={
+              <ProtectedRoute roles={['admin']}>
                 <DashboardLayout>
                   <Dashboard />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/dashboard/staff"
+            element={
+              <ProtectedRoute roles={['staff']}>
+                <DashboardLayout>
+                  <Dashboard />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/dashboard/user"
+            element={
+              <ProtectedRoute roles={['user']}>
+                <DashboardLayout>
+                  <div className="p-12 text-center text-slate-500 font-black uppercase tracking-widest">
+                    Welcome to your Personal Hub.
+                  </div>
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/staff"
+            element={
+              <ProtectedRoute roles={['admin']}>
+                <DashboardLayout>
+                  <ManageStaff />
                 </DashboardLayout>
               </ProtectedRoute>
             }

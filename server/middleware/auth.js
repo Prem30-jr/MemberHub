@@ -17,11 +17,23 @@ const verifyToken = async (req, res, next) => {
     }
 
     try {
-        const decodedToken = await admin.auth().verifyIdToken(token);
-        req.user = decodedToken;
-        next();
+        // Try Firebase verification first (for admins/synced users)
+        try {
+            const decodedToken = await admin.auth().verifyIdToken(token);
+            req.user = decodedToken;
+            return next();
+        } catch (firebaseErr) {
+            // If Firebase fails, try custom JWT (for staff)
+            const jwt = require('jsonwebtoken');
+            const JWT_SECRET = process.env.JWT_SECRET || 'memberhub_secret_2024';
+
+            const decoded = jwt.verify(token, JWT_SECRET);
+            // Simulate the firebase structure for checkRole compatibility
+            req.user = { uid: decoded.id, customAuth: true };
+            next();
+        }
     } catch (error) {
-        console.error('Firebase Auth Error:', error.message);
+        console.error('Auth Verification Error:', error.message);
         res.status(401).json({ message: 'Token is not valid' });
     }
 };
@@ -30,14 +42,18 @@ const checkRole = (roles) => {
     return async (req, res, next) => {
         try {
             const Member = require('../models/Member');
-            const member = await Member.findOne({ firebaseUid: req.user.uid });
+            let member;
+
+            if (req.user.customAuth) {
+                member = await Member.findById(req.user.uid);
+            } else {
+                member = await Member.findOne({ firebaseUid: req.user.uid });
+            }
 
             if (!member) {
                 console.warn(`[AuthMiddleware] Access Denied: No member record for UID ${req.user.uid} on ${req.originalUrl}`);
                 return res.status(403).json({
-                    message: 'User profile not found. Please sync your account.',
-                    reason: 'UID_NOT_FOUND',
-                    uid: req.user.uid
+                    message: 'User profile not found. Please contact support.',
                 });
             }
 

@@ -16,9 +16,10 @@ const Sidebar = () => {
 
     const menuItems = [
         { title: 'Overview', path: '/', icon: HomeIcon, roles: ['admin', 'staff'] },
-        { title: 'Membership', path: '/members', icon: UsersIcon, roles: ['admin', 'staff'] },
+        { title: 'Manage Staff', path: '/staff', icon: UsersIcon, roles: ['admin'] },
+        { title: 'Members Directory', path: '/members', icon: UsersIcon, roles: ['admin', 'staff'] },
         { title: 'Subscription Plans', path: '/plans', icon: ClipboardDocumentListIcon, roles: ['admin'] },
-        { title: 'Collections', path: '/payments', icon: CreditCardIcon, roles: ['admin', 'staff'] },
+        { title: 'Financial Ledger', path: '/payments', icon: CreditCardIcon, roles: ['admin', 'staff'] },
         { title: 'Alert Center', path: '/notifications', icon: BellIcon, roles: ['admin', 'staff'] },
     ];
 
@@ -37,24 +38,52 @@ const Sidebar = () => {
                 </div>
             </div>
 
-            <div className="flex-1 px-4 py-2 space-y-1 overflow-y-auto">
-                <p className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4">Main Menu</p>
-                {filteredMenuItems.map((item) => {
-                    const isActive = location.pathname === item.path;
-                    return (
-                        <Link
-                            key={item.path}
-                            to={item.path}
-                            className={`flex items-center px-4 py-3.5 text-sm font-semibold rounded-2xl transition-all duration-300 group ${isActive
-                                ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-[1.02]'
-                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                }`}
-                        >
-                            <item.icon className={`w-5 h-5 mr-3.5 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-primary'}`} />
-                            {item.title}
-                        </Link>
-                    );
-                })}
+            <div className="flex-1 px-4 py-2 space-y-6 overflow-y-auto">
+                {role === 'admin' && (
+                    <div>
+                        <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Supervisory</p>
+                        <div className="space-y-1">
+                            {filteredMenuItems.filter(i => ['Manage Staff', 'Subscription Plans'].includes(i.title)).map((item) => {
+                                const isActive = location.pathname === item.path;
+                                return (
+                                    <Link
+                                        key={item.path}
+                                        to={item.path}
+                                        className={`flex items-center px-4 py-3 text-sm font-semibold rounded-2xl transition-all duration-300 group ${isActive
+                                            ? 'bg-primary text-white shadow-xl shadow-primary/20'
+                                            : 'text-slate-500 hover:bg-slate-50'
+                                            }`}
+                                    >
+                                        <item.icon className={`w-5 h-5 mr-3.5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-primary'}`} />
+                                        {item.title}
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                <div>
+                    <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Operational</p>
+                    <div className="space-y-1">
+                        {filteredMenuItems.filter(i => !['Manage Staff', 'Subscription Plans'].includes(i.title)).map((item) => {
+                            const isActive = location.pathname === item.path;
+                            return (
+                                <Link
+                                    key={item.path}
+                                    to={item.path}
+                                    className={`flex items-center px-4 py-3 text-sm font-semibold rounded-2xl transition-all duration-300 group ${isActive
+                                        ? 'bg-primary text-white shadow-xl shadow-primary/20'
+                                        : 'text-slate-500 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    <item.icon className={`w-5 h-5 mr-3.5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-primary'}`} />
+                                    {item.title}
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </div>
             </div>
 
             <div className="p-6 border-t border-slate-100">

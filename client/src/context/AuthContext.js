@@ -23,34 +23,72 @@ export const AuthProvider = ({ children }) => {
         return signInWithPopup(auth, googleProvider);
     };
 
-    const logout = () => {
-        return signOut(auth);
+    const loginStaff = async (email, password) => {
+        setLoading(true);
+        try {
+            const res = await api.post('/auth/login-staff', { email, password });
+            const { token, member } = res.data;
+            localStorage.setItem('staffToken', token);
+            setUser({ email: member.email, displayName: `${member.personalInfo.firstName} ${member.personalInfo.lastName}`, isStaff: true });
+            setRole('staff');
+            setMemberData(member);
+            return true;
+        } catch (err) {
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const logout = async () => {
+        localStorage.removeItem('staffToken');
+        await signOut(auth);
+        setUser(null);
+        setRole(null);
+        setMemberData(null);
     };
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
-
-            if (currentUser) {
-                try {
-                    // Sync with backend and get member data (including role)
-                    const response = await api.post('/auth/sync');
-                    setRole(response.data.role);
-                    setMemberData(response.data);
-                } catch (error) {
-                    console.error('[AuthContext] Sync Error:', error.response?.data?.message || error.message);
-                    // Default to staff if sync fails but user is authenticated
-                    setRole('staff');
+        const checkAuth = async () => {
+            // Priority 1: Firebase User (Admin)
+            const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+                if (currentUser) {
+                    setUser(currentUser);
+                    try {
+                        const response = await api.post('/auth/sync');
+                        setRole(response.data.role);
+                        setMemberData(response.data);
+                    } catch (error) {
+                        setRole('staff'); // Fallback
+                    }
+                    setLoading(false);
+                } else {
+                    // Priority 2: Manual Token (Staff)
+                    const staffToken = localStorage.getItem('staffToken');
+                    if (staffToken) {
+                        try {
+                            const response = await api.get('/members/me'); // We should add this endpoint
+                            setUser({ email: response.data.email, isStaff: true });
+                            setRole('staff');
+                            setMemberData(response.data);
+                        } catch (err) {
+                            localStorage.removeItem('staffToken');
+                            setUser(null);
+                            setRole(null);
+                        }
+                    } else {
+                        setUser(null);
+                        setRole(null);
+                        setMemberData(null);
+                    }
+                    setLoading(false);
                 }
-            } else {
-                setRole(null);
-                setMemberData(null);
-            }
+            });
+            return unsubscribe;
+        };
 
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
+        const unsub = checkAuth();
+        return () => unsub.then(f => f());
     }, []);
 
     const value = {
@@ -58,6 +96,7 @@ export const AuthProvider = ({ children }) => {
         role,
         memberData,
         loginWithGoogle,
+        loginStaff,
         logout,
         loading
     };

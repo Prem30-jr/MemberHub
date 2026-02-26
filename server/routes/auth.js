@@ -54,4 +54,33 @@ router.post('/sync', verifyToken, async (req, res) => {
   }
 });
 
+// @route   POST /api/auth/login-staff
+// @desc    Custom login for staff (Non-Firebase)
+// @access  Public
+router.post('/login-staff', async (req, res) => {
+  const { email, password } = req.body;
+  console.log(`[StaffLogin] Login attempt for ${email}`);
+  try {
+    const bcrypt = require('bcryptjs');
+    const jwt = require('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'memberhub_secret_2024';
+
+    const member = await Member.findOne({ email, role: 'staff' }).select('+password');
+    if (!member) return res.status(401).json({ message: 'Invalid credentials' });
+
+    if (member.status !== 'Active') {
+      return res.status(403).json({ message: 'Account is deactivated' });
+    }
+
+    const isMatch = await bcrypt.compare(password, member.password);
+    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+
+    const token = jwt.sign({ id: member._id, email: member.email }, JWT_SECRET, { expiresIn: '1d' });
+
+    res.json({ token, member });
+  } catch (err) {
+    res.status(500).json({ message: 'Login failed', error: err.message });
+  }
+});
+
 module.exports = router;

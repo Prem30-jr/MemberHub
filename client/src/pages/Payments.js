@@ -8,10 +8,12 @@ import {
 } from '@heroicons/react/24/outline';
 import api from '../services/api';
 import Papa from 'papaparse';
+import { useAuth } from '../context/AuthContext';
 import { Button, Input, Modal, Select } from '../components/UI';
 import ReceiptModal from '../components/ReceiptModal';
 
 const Payments = () => {
+    const { role } = useAuth();
     const [payments, setPayments] = useState([]);
     const [members, setMembers] = useState([]);
     const [plans, setPlans] = useState([]);
@@ -284,18 +286,20 @@ const Payments = () => {
         <div className="space-y-6 pb-12">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h3 className="text-2xl font-bold text-slate-800 tracking-tight">Financial Ledger</h3>
-                    <p className="text-slate-500 font-medium">Manage all revenue entries and invoices.</p>
+                    <h3 className="text-2xl font-black text-slate-800 tracking-tight">Financial Ledger</h3>
+                    <p className="text-slate-500 font-medium">Monitoring economic flow and individual transaction metadata.</p>
                 </div>
                 <div className="flex space-x-3">
-                    <Button variant="secondary" onClick={downloadCSV}>
+                    <Button onClick={downloadCSV} variant="secondary">
                         <ArrowDownTrayIcon className="w-5 h-5 mr-2" />
-                        Export Report
+                        Export Audit
                     </Button>
-                    <Button onClick={handleOpenModal}>
-                        <PlusIcon className="w-5 h-5 mr-2" />
-                        Record Entry
-                    </Button>
+                    {role === 'staff' && (
+                        <Button onClick={handleOpenModal}>
+                            <PlusIcon className="w-5 h-5 mr-2" />
+                            Record Entry
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -401,7 +405,7 @@ const Payments = () => {
                                         </td>
                                         <td className="px-8 py-6 text-right">
                                             <div className="flex justify-end items-center space-x-3">
-                                                {txn.member && (txn.member.status !== 'Active') && (
+                                                {role === 'staff' && txn.member && (txn.member.status !== 'Active') && (
                                                     <button
                                                         onClick={() => {
                                                             setRenewMember(txn.member);
