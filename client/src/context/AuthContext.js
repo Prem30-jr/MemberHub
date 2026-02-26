@@ -23,14 +23,32 @@ export const AuthProvider = ({ children }) => {
         return signInWithPopup(auth, googleProvider);
     };
 
-    const loginStaff = async (email, password) => {
+    const loginCustom = async (email, password, type) => {
         setLoading(true);
         try {
-            const res = await api.post('/auth/login-staff', { email, password });
+            const endpoint = type === 'staff' ? '/auth/login-staff' : '/auth/login-user';
+            const res = await api.post(endpoint, { email, password });
             const { token, member } = res.data;
-            localStorage.setItem('staffToken', token);
-            setUser({ email: member.email, displayName: `${member.personalInfo.firstName} ${member.personalInfo.lastName}`, isStaff: true });
-            setRole('staff');
+            localStorage.setItem('authToken', token);
+            setUser({ email: member.email, displayName: `${member.personalInfo.firstName} ${member.personalInfo.lastName}`, isCustom: true });
+            setRole(member.role);
+            setMemberData(member);
+            return true;
+        } catch (err) {
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const registerUser = async (name, email, password) => {
+        setLoading(true);
+        try {
+            const res = await api.post('/auth/register-user', { name, email, password });
+            const { token, member } = res.data;
+            localStorage.setItem('authToken', token);
+            setUser({ email: member.email, displayName: `${member.personalInfo.firstName} ${member.personalInfo.lastName}`, isCustom: true });
+            setRole('user');
             setMemberData(member);
             return true;
         } catch (err) {
@@ -41,7 +59,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = async () => {
-        localStorage.removeItem('staffToken');
+        localStorage.removeItem('authToken');
         await signOut(auth);
         setUser(null);
         setRole(null);
@@ -59,20 +77,20 @@ export const AuthProvider = ({ children }) => {
                         setRole(response.data.role);
                         setMemberData(response.data);
                     } catch (error) {
-                        setRole('staff'); // Fallback
+                        setRole('user'); // Fallback
                     }
                     setLoading(false);
                 } else {
-                    // Priority 2: Manual Token (Staff)
-                    const staffToken = localStorage.getItem('staffToken');
-                    if (staffToken) {
+                    // Priority 2: Manual Token (Staff/User)
+                    const authToken = localStorage.getItem('authToken');
+                    if (authToken) {
                         try {
-                            const response = await api.get('/members/me'); // We should add this endpoint
-                            setUser({ email: response.data.email, isStaff: true });
-                            setRole('staff');
+                            const response = await api.get('/members/me');
+                            setUser({ email: response.data.email, isCustom: true });
+                            setRole(response.data.role);
                             setMemberData(response.data);
                         } catch (err) {
-                            localStorage.removeItem('staffToken');
+                            localStorage.removeItem('authToken');
                             setUser(null);
                             setRole(null);
                         }
@@ -96,7 +114,8 @@ export const AuthProvider = ({ children }) => {
         role,
         memberData,
         loginWithGoogle,
-        loginStaff,
+        loginCustom,
+        registerUser,
         logout,
         loading
     };

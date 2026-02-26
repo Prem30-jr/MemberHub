@@ -83,4 +83,69 @@ router.post('/login-staff', async (req, res) => {
   }
 });
 
+// @route   POST /api/auth/register-user
+// @desc    Custom registration for users
+// @access  Public
+router.post('/register-user', async (req, res) => {
+  const { name, email, password } = req.body;
+  console.log(`[UserRegister] Registration attempt for ${email}`);
+  try {
+    const existingMember = await Member.findOne({ email });
+    if (existingMember) return res.status(400).json({ message: 'User already exists' });
+
+    const nameParts = name.trim().split(' ');
+    const firstName = nameParts[0] || 'Member';
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+
+    const newMember = new Member({
+      personalInfo: { firstName, lastName },
+      email,
+      password, // Hashed by Member model pre-save hook
+      role: 'user',
+      status: 'Active'
+    });
+
+    await newMember.save();
+
+    const jwt = require('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'memberhub_secret_2024';
+    const token = jwt.sign({ id: newMember._id, email: newMember.email }, JWT_SECRET, { expiresIn: '1d' });
+
+    res.status(201).json({ token, member: newMember });
+  } catch (err) {
+    res.status(500).json({ message: 'Registration failed', error: err.message });
+  }
+});
+
+// @route   POST /api/auth/login-user
+// @desc    Simplified login for users (Email only)
+// @access  Public
+router.post('/login-user', async (req, res) => {
+  const { email } = req.body;
+  console.log(`[UserLogin] Login attempt for ${email}`);
+  try {
+    const jwt = require('jsonwebtoken');
+    const JWT_SECRET = process.env.JWT_SECRET || 'memberhub_secret_2024';
+
+    const member = await Member.findOne({ email, role: 'user' })
+      .populate('currentPlan')
+      .populate('recommendation.plan');
+
+    if (!member) {
+      return res.status(404).json({ message: 'Email not registered. Please contact staff.' });
+    }
+
+    // Allow login regardless of status (e.g. Expired users can still login to renew)
+    if (member.status === 'Suspended') {
+      return res.status(403).json({ message: 'Account is suspended. Please contact support.' });
+    }
+
+    const token = jwt.sign({ id: member._id, email: member.email }, JWT_SECRET, { expiresIn: '1d' });
+
+    res.json({ token, member });
+  } catch (err) {
+    res.status(500).json({ message: 'Login failed', error: err.message });
+  }
+});
+
 module.exports = router;

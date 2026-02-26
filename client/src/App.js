@@ -12,6 +12,7 @@ import Plans from './pages/Plans';
 import Payments from './pages/Payments';
 import Notifications from './pages/Notifications';
 import ManageStaff from './pages/ManageStaff';
+import UserDashboard from './pages/UserDashboard';
 
 const DashboardRedirect = () => {
   const { role, loading } = useAuth();
@@ -64,9 +65,7 @@ function App() {
             element={
               <ProtectedRoute roles={['user']}>
                 <DashboardLayout>
-                  <div className="p-12 text-center text-slate-500 font-black uppercase tracking-widest">
-                    Welcome to your Personal Hub.
-                  </div>
+                  <UserDashboard />
                 </DashboardLayout>
               </ProtectedRoute>
             }

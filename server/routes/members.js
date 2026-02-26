@@ -11,9 +11,11 @@ const { generateSmartMessage } = require('../services/aiMessageService');
 // @route   GET /api/members/me
 // @desc    Get current session member
 // @access  Private
-router.get('/me', verifyToken, async (req, res) => {
+router.get('/me', verifyToken, checkRole(['admin', 'staff', 'user']), async (req, res) => {
     try {
-        const member = await Member.findById(req.member._id).populate('currentPlan');
+        const member = await Member.findById(req.member._id)
+            .populate('currentPlan')
+            .populate('recommendation.plan');
         if (!member) return res.status(404).json({ message: 'User not found' });
         res.json(member);
     } catch (err) {
@@ -173,8 +175,13 @@ router.delete('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
 // @route   GET /api/members/:id/payments
 // @desc    Get payment history for a member
 // @access  Admin/Staff
-router.get('/:id/payments', verifyToken, checkRole(['admin', 'staff']), async (req, res) => {
+router.get('/:id/payments', verifyToken, checkRole(['admin', 'staff', 'user']), async (req, res) => {
     try {
+        // Enforce user can only see their own payments
+        if (req.member.role === 'user' && req.params.id !== req.member._id.toString()) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
         const Payment = require('../models/Payment');
         const payments = await Payment.find({ member: req.params.id }).populate('plan').sort({ paymentDate: -1 });
         res.json(payments);

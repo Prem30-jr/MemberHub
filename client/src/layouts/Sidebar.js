@@ -16,6 +16,7 @@ const Sidebar = () => {
 
     const menuItems = [
         { title: 'Overview', path: '/', icon: HomeIcon, roles: ['admin', 'staff'] },
+        { title: 'Personal Hub', path: '/dashboard/user', icon: HomeIcon, roles: ['user'] },
         { title: 'Manage Staff', path: '/staff', icon: UsersIcon, roles: ['admin'] },
         { title: 'Members Directory', path: '/members', icon: UsersIcon, roles: ['admin', 'staff'] },
         { title: 'Subscription Plans', path: '/plans', icon: ClipboardDocumentListIcon, roles: ['admin'] },
@@ -64,7 +65,9 @@ const Sidebar = () => {
                 )}
 
                 <div>
-                    <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Operational</p>
+                    <p className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                        {role === 'user' ? 'Member Access' : 'Operational'}
+                    </p>
                     <div className="space-y-1">
                         {filteredMenuItems.filter(i => !['Manage Staff', 'Subscription Plans'].includes(i.title)).map((item) => {
                             const isActive = location.pathname === item.path;

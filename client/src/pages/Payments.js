@@ -4,8 +4,10 @@ import {
     ArrowDownTrayIcon,
     PlusIcon,
     CreditCardIcon,
+    UserIcon,
     ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Papa from 'papaparse';
 import { useAuth } from '../context/AuthContext';
@@ -14,6 +16,7 @@ import ReceiptModal from '../components/ReceiptModal';
 
 const Payments = () => {
     const { role } = useAuth();
+    const navigate = useNavigate();
     const [payments, setPayments] = useState([]);
     const [members, setMembers] = useState([]);
     const [plans, setPlans] = useState([]);
@@ -404,24 +407,32 @@ const Payments = () => {
                                             {new Date(txn.paymentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                         </td>
                                         <td className="px-8 py-6 text-right">
-                                            <div className="flex justify-end items-center space-x-3">
+                                            <div className="flex justify-end items-center space-x-2">
                                                 {role === 'staff' && txn.member && (txn.member.status !== 'Active') && (
                                                     <button
                                                         onClick={() => {
                                                             setRenewMember(txn.member);
                                                             setIsRenewModalOpen(true);
                                                         }}
-                                                        className="p-2 text-rose-500 hover:text-rose-600 transition-colors bg-rose-50 rounded-lg border border-rose-100"
+                                                        className="p-2 text-rose-500 hover:text-rose-600 transition-colors bg-rose-50 rounded-xl shadow-sm border border-rose-100"
                                                         title="Process Renewal"
                                                     >
-                                                        <CreditCardIcon className="w-4 h-4" />
+                                                        <CreditCardIcon className="w-5 h-5" />
                                                     </button>
                                                 )}
                                                 <button
                                                     onClick={() => handleViewReceipt(txn)}
-                                                    className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline hover:text-indigo-800 transition-colors"
+                                                    className="p-2 text-slate-400 hover:text-primary transition-colors bg-white rounded-xl shadow-sm border border-slate-100"
+                                                    title="View Receipt"
                                                 >
-                                                    Generate Receipt
+                                                    <ArrowDownTrayIcon className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => navigate(`/members?id=${txn.member?._id}`)}
+                                                    className="p-2 text-slate-400 hover:text-indigo-500 transition-colors bg-white rounded-xl shadow-sm border border-slate-100"
+                                                    title="Member Profile"
+                                                >
+                                                    <UserIcon className="w-5 h-5" />
                                                 </button>
                                             </div>
                                         </td>

@@ -17,8 +17,8 @@ api.interceptors.request.use(
             const token = await user.getIdToken();
             config.headers.Authorization = `Bearer ${token}`;
         } else {
-            // 2. Try Manual Token (for staff)
-            const manualToken = localStorage.getItem('staffToken');
+            // 2. Try Manual Token (for staff/user)
+            const manualToken = localStorage.getItem('authToken');
             if (manualToken) {
                 config.headers.Authorization = `Bearer ${manualToken}`;
             }
