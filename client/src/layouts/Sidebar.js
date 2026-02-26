@@ -108,7 +108,7 @@ const Sidebar = () => {
                         Sign Out
                     </button>
                 </div>
-                <p className="text-[10px] text-center text-slate-400 font-medium">v1.2.0-stable</p>
+                <p className="text-[10px] text-center text-slate-400 font-medium">Operations Hub</p>
             </div>
         </div>
     );

@@ -23,7 +23,7 @@ const UserDashboard = () => {
                 // The /me route will already have updated memberData if we refresh or on mount
                 // but we also need payment history
                 const res = await api.get(`/members/${memberData._id}/payments`);
-                setPayments(res.data);
+                setPayments(res.data.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate)));
             } catch (err) {
                 console.error('Error fetching user data:', err);
             } finally {
@@ -182,7 +182,6 @@ const UserDashboard = () => {
                     </div>
                 </div>
 
-                {/* Sidebar Cards */}
                 <div className="space-y-8">
                     {/* Security & Identity */}
                     <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100 relative overflow-hidden">
@@ -214,19 +213,55 @@ const UserDashboard = () => {
                                 </div>
                             </div>
                         </div>
-                        <Button variant="secondary" className="w-full mt-10 text-[10px] uppercase tracking-[0.2em] font-black py-4 rounded-2xl" onClick={() => alert('Profile editing is restricted for compliance.')}>
-                            Update Metadata
-                        </Button>
                     </div>
 
-                    {/* Support & Concierge */}
-                    <div className="bg-gradient-to-br from-indigo-600 to-primary p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-                        <h3 className="text-sm font-black uppercase tracking-[0.2em] mb-4">Concierge</h3>
-                        <p className="text-xs text-indigo-100/70 leading-relaxed font-medium mb-8">Direct access to the Hub operations team for billing or tier adjustments.</p>
-                        <button className="w-full py-4 bg-white text-primary rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all active:scale-95">
-                            Establish Link
-                        </button>
+                    {/* Plan Progression */}
+                    <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
+                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-[0.2em] mb-6">Cycle Progression</h3>
+                        <div className="relative pt-1">
+                            <div className="flex mb-2 items-center justify-between">
+                                <div>
+                                    <span className="text-[10px] font-black inline-block py-1 px-2 uppercase rounded-full text-primary bg-primary/10 tracking-widest">
+                                        Term Progress
+                                    </span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-[10px] font-black inline-block text-slate-400 uppercase tracking-widest">
+                                        {Math.max(0, 100 - Math.round((daysLeft / 30) * 100))}%
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="overflow-hidden h-2 mb-4 text-xs flex rounded-full bg-slate-100">
+                                <div
+                                    style={{ width: `${Math.max(5, 100 - (daysLeft / 30) * 100)}%` }}
+                                    className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-primary transition-all duration-1000"
+                                ></div>
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-medium leading-relaxed italic">
+                                Visualizing your distance from the next renewal milestone.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Exclusive Perks */}
+                    <div className="bg-gradient-to-br from-indigo-950 to-slate-900 p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full -mr-16 -mt-16 blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                        <h3 className="text-sm font-black uppercase tracking-[0.2em] mb-8">Exclusive Perks</h3>
+                        <ul className="space-y-4">
+                            {[
+                                { title: 'Priority Access', desc: 'Direct operations link' },
+                                { title: 'Smart Insights', desc: 'AI-driven behavioral tech' },
+                                { title: 'Unified Billing', desc: 'Seamless financial ledger' }
+                            ].map((perk, i) => (
+                                <li key={i} className="flex items-start gap-4">
+                                    <div className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0"></div>
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest">{perk.title}</p>
+                                        <p className="text-[8px] text-slate-400 font-medium">{perk.desc}</p>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 </div>
             </div>

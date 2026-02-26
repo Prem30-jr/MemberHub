@@ -18,12 +18,7 @@ const DashboardLayout = ({ children }) => {
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Membership Management System</p>
                     </div>
 
-                    <div className="flex items-center space-x-6">
-                        <div className="h-10 w-[1px] bg-slate-100 mx-2"></div>
-                        <div className="text-right">
-                            <p className="text-sm font-bold text-slate-900 leading-none">{user?.displayName || user?.email?.split('@')[0]}</p>
-                            <p className="text-[10px] font-bold text-primary mt-1">{user?.email}</p>
-                        </div>
+                    <div className="flex items-center">
                         <div className="relative">
                             {user?.photoURL ? (
                                 <img src={user.photoURL} alt="User" className="w-12 h-12 rounded-2xl border-2 border-white shadow-md" />

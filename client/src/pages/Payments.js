@@ -53,7 +53,7 @@ const Payments = () => {
                 api.get('/plans')
             ]);
 
-            const data = paymentsRes.data;
+            const data = paymentsRes.data.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate));
             setPayments(data);
             setMembers(membersRes.data);
             setPlans(plansRes.data);

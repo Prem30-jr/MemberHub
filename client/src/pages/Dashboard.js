@@ -257,7 +257,7 @@ const Dashboard = () => {
                         </div>
                         <span className="text-[10px] font-black bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg uppercase tracking-wider border border-indigo-100">Live AI Logic</span>
                     </div>
-                    <div className="h-80 relative">
+                    <div className="h-80 flex items-center justify-center">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -267,7 +267,6 @@ const Dashboard = () => {
                                     innerRadius={70}
                                     outerRadius={100}
                                     labelLine={false}
-                                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                                     paddingAngle={8}
                                     dataKey="value"
                                 >
@@ -275,8 +274,15 @@ const Dashboard = () => {
                                         <Cell key={`cell-${index}`} fill={AI_COLORS[index % AI_COLORS.length]} />
                                     ))}
                                 </Pie>
-                                <Tooltip contentStyle={{ borderRadius: '16px', border: 'none' }} />
-                                <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontWeight: 'bold', fontSize: '12px' }} />
+                                <Tooltip
+                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                />
+                                <Legend
+                                    verticalAlign="bottom"
+                                    height={36}
+                                    iconType="circle"
+                                    wrapperStyle={{ fontWeight: 'black', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
