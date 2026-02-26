@@ -24,6 +24,10 @@ const Members = () => {
     const [loading, setLoading] = useState(true);
     const [filterPlan, setFilterPlan] = useState('All');
 
+    // Renewal states
+    const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+    const [renewMember, setRenewMember] = useState(null);
+
     // Member Modal states
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentMember, setCurrentMember] = useState(null);
@@ -72,7 +76,70 @@ const Members = () => {
 
     useEffect(() => {
         fetchData();
+        // Load Razorpay Script
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        document.body.appendChild(script);
     }, [fetchData]);
+
+    const handleRenewPayment = async () => {
+        if (!renewMember || !renewMember.currentPlan) return;
+        const plan = renewMember.currentPlan;
+
+        try {
+            // 1. Create Order on Backend
+            const orderRes = await api.post('/payments/razorpay/order', {
+                amount: plan.price,
+                currency: 'USD'
+            });
+
+            const { id: order_id, key_id, amount, currency } = orderRes.data;
+
+            const options = {
+                key: key_id,
+                amount: amount,
+                currency: currency,
+                name: "MemberHub Premium",
+                description: `Renewal for ${plan.name}`,
+                order_id: order_id,
+                handler: async function (response) {
+                    try {
+                        // 2. Verify Payment on Backend
+                        await api.post('/payments/razorpay/verify', {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                            memberId: renewMember._id,
+                            planId: plan._id,
+                            amount: plan.price
+                        });
+
+                        // Trigger AI Recalculation by fetching the member data which triggers the hooks in backend
+                        await api.get(`/members/${renewMember._id}`);
+
+                        alert('Renewal successful!');
+                        await fetchData();
+                        setIsRenewModalOpen(false);
+                    } catch (err) {
+                        alert('Verification failed: ' + (err.response?.data?.message || err.message));
+                    }
+                },
+                prefill: {
+                    name: renewMember.personalInfo.firstName + ' ' + renewMember.personalInfo.lastName,
+                    email: renewMember.email,
+                },
+                theme: {
+                    color: "#6366f1",
+                },
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+        } catch (err) {
+            alert('Razorpay initiation failed: ' + (err.response?.data?.message || err.message));
+        }
+    };
 
     const handleOpenModal = (member = null) => {
         if (member) {
@@ -158,7 +225,8 @@ const Members = () => {
             } else {
                 const res = await api.post('/members', {
                     ...formData,
-                    firebaseUid: `mock_${Date.now()}`
+                    role: 'user',
+                    firebaseUid: `mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
                 });
 
                 const selectedPlan = plans.find(p => p._id === formData.planId);
@@ -167,12 +235,12 @@ const Members = () => {
                         memberId: res.data._id,
                         planId: formData.planId,
                         amount: selectedPlan.price,
-                        transactionId: 'Initial Registration',
+                        transactionId: `Initial Registration_${Date.now()}`,
                         status: 'Paid'
                     });
                 }
             }
-            fetchData();
+            await fetchData();
             setIsModalOpen(false);
         } catch (err) {
             console.error('Submit error:', err);
@@ -209,6 +277,7 @@ const Members = () => {
     };
 
     const filteredMembers = members.filter(m => {
+        if (m.role !== 'user') return false;
         const matchesSearch = m.personalInfo.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             m.personalInfo.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             m.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -217,6 +286,17 @@ const Members = () => {
     });
 
     const uniquePlansList = ['All', ...new Set(members.map(m => m.currentPlan?.name).filter(Boolean))];
+
+    const getDaysRemaining = (endDate) => {
+        if (!endDate) return null;
+        return Math.ceil((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24));
+    };
+
+    const expiringMembers = members.filter(m => {
+        if (m.role !== 'user') return false;
+        const days = m.endDate ? getDaysRemaining(m.endDate) : null;
+        return days !== null && days <= 7 && days >= -30;
+    }).sort((a, b) => getDaysRemaining(a.endDate) - getDaysRemaining(b.endDate));
 
     return (
         <div className="space-y-6 pb-12">
@@ -236,6 +316,50 @@ const Members = () => {
                     </Button>
                 </div>
             </div>
+
+            {expiringMembers.length > 0 && (
+                <div className="bg-rose-50/50 rounded-[2rem] shadow-sm border border-rose-100 overflow-hidden mb-8">
+                    <div className="p-6 border-b border-rose-100/50 bg-rose-50 flex items-center gap-3">
+                        <ExclamationTriangleIcon className="w-6 h-6 text-rose-500" />
+                        <div>
+                            <h4 className="text-lg font-black text-rose-900 tracking-tight">Expiring Soon</h4>
+                            <p className="text-xs text-rose-600 font-bold uppercase tracking-widest">Action Required for {expiringMembers.length} Members</p>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {expiringMembers.map(m => {
+                                const days = getDaysRemaining(m.endDate);
+                                const isExpired = days < 0;
+                                return (
+                                    <div key={m._id} className="bg-white p-5 rounded-2xl border border-rose-100 shadow-sm flex flex-col justify-between">
+                                        <div className="mb-4">
+                                            <p className="font-black text-slate-900 text-lg leading-tight">{m.personalInfo.firstName} {m.personalInfo.lastName}</p>
+                                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{m.currentPlan?.name || 'N/A'}</p>
+                                        </div>
+                                        <div className="mb-4 space-y-1">
+                                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Expires: {new Date(m.endDate).toLocaleDateString()}</p>
+                                            <p className={`font-black text-sm ${isExpired ? 'text-rose-600' : 'text-amber-500'}`}>
+                                                {isExpired ? `Expired ${Math.abs(days)} days ago` : `${days} days remaining`}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            onClick={() => {
+                                                setRenewMember(m);
+                                                setIsRenewModalOpen(true);
+                                            }}
+                                            className="w-full bg-rose-600 hover:bg-rose-700 shadow-rose-200"
+                                        >
+                                            <CreditCardIcon className="w-4 h-4 mr-2" />
+                                            Renew Subscription
+                                        </Button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
                 <div className="p-6 border-b border-slate-50 flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-50/20">
@@ -394,17 +518,17 @@ const Members = () => {
 
                     {currentMember && currentMember.churnRisk && (
                         <div className={`p-6 rounded-[2rem] border space-y-4 ${currentMember.churnRisk.level === 'HIGH' ? 'bg-rose-50 border-rose-100' :
-                                currentMember.churnRisk.level === 'MEDIUM' ? 'bg-amber-50 border-amber-100' :
-                                    'bg-emerald-50 border-emerald-100'
+                            currentMember.churnRisk.level === 'MEDIUM' ? 'bg-amber-50 border-amber-100' :
+                                'bg-emerald-50 border-emerald-100'
                             }`}>
                             <div className="flex items-center justify-between">
                                 <h5 className={`text-[10px] font-black uppercase tracking-widest ${currentMember.churnRisk.level === 'HIGH' ? 'text-rose-600' :
-                                        currentMember.churnRisk.level === 'MEDIUM' ? 'text-amber-600' :
-                                            'text-emerald-600'
+                                    currentMember.churnRisk.level === 'MEDIUM' ? 'text-amber-600' :
+                                        'text-emerald-600'
                                     }`}>Churn Prediction System</h5>
                                 <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-wider text-white ${currentMember.churnRisk.level === 'HIGH' ? 'bg-rose-600' :
-                                        currentMember.churnRisk.level === 'MEDIUM' ? 'bg-amber-600' :
-                                            'bg-emerald-600'
+                                    currentMember.churnRisk.level === 'MEDIUM' ? 'bg-amber-600' :
+                                        'bg-emerald-600'
                                     }`}>
                                     {currentMember.churnRisk.level === 'HIGH' ? '🔴 Renewal Risk: HIGH' :
                                         currentMember.churnRisk.level === 'MEDIUM' ? '🟡 Renewal Risk: MEDIUM' :
@@ -413,12 +537,12 @@ const Members = () => {
                             </div>
                             <div className="flex items-start space-x-4">
                                 <div className={`p-3 bg-white rounded-2xl shadow-sm border transition-transform hover:scale-110 ${currentMember.churnRisk.level === 'HIGH' ? 'border-rose-100' :
-                                        currentMember.churnRisk.level === 'MEDIUM' ? 'border-amber-100' :
-                                            'border-emerald-100'
+                                    currentMember.churnRisk.level === 'MEDIUM' ? 'border-amber-100' :
+                                        'border-emerald-100'
                                     }`}>
                                     <ExclamationTriangleIcon className={`w-6 h-6 ${currentMember.churnRisk.level === 'HIGH' ? 'text-rose-500' :
-                                            currentMember.churnRisk.level === 'MEDIUM' ? 'text-amber-500' :
-                                                'text-emerald-500'
+                                        currentMember.churnRisk.level === 'MEDIUM' ? 'text-amber-500' :
+                                            'text-emerald-500'
                                         }`} />
                                 </div>
                                 <div className="flex-1">
@@ -584,6 +708,44 @@ const Members = () => {
                 onClose={() => setIsReceiptOpen(false)}
                 payment={selectedPayment}
             />
+
+            {/* Renew Modal */}
+            <Modal
+                isOpen={isRenewModalOpen}
+                onClose={() => setIsRenewModalOpen(false)}
+                title="Process Renewal"
+            >
+                <div className="space-y-6">
+                    <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 text-center">
+                        <p className="text-[11px] font-black text-indigo-900 uppercase tracking-widest mb-1">Renewal For</p>
+                        <p className="text-lg font-black text-indigo-700">
+                            {renewMember?.personalInfo?.firstName} {renewMember?.personalInfo?.lastName}
+                        </p>
+                        <p className="text-sm font-medium text-indigo-600 mt-2">
+                            Plan: <span className="font-bold">{renewMember?.currentPlan?.name}</span>
+                        </p>
+                        <p className="text-sm font-medium text-indigo-600">
+                            Amount: <span className="font-bold">${renewMember?.currentPlan?.price}</span>
+                        </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 flex items-start gap-4 rounded-2xl border border-slate-200">
+                        <ExclamationTriangleIcon className="w-6 h-6 text-slate-400 shrink-0" />
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                            A secure checkout window provided by Razorpay will open. After a successful payment, the subscription will auto-renew and trigger AI metrics recalculation.
+                        </p>
+                    </div>
+
+                    <div className="flex space-x-3 pt-6 border-t border-slate-100">
+                        <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsRenewModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleRenewPayment} type="button" className="flex-1">
+                            Proceed to Gateway
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

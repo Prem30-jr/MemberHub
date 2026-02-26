@@ -21,8 +21,12 @@ const memberSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['admin', 'staff'],
-        default: 'staff'
+        enum: ['admin', 'staff', 'user'],
+        default: 'user'
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Member'
     },
     currentPlan: {
         type: mongoose.Schema.Types.ObjectId,

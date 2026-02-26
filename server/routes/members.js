@@ -13,7 +13,7 @@ const { generateSmartMessage } = require('../services/aiMessageService');
 // @access  Admin/Staff
 router.get('/', verifyToken, checkRole(['admin', 'staff']), async (req, res) => {
     try {
-        const members = await Member.find().populate('currentPlan').populate('recommendation.plan');
+        const members = await Member.find({ role: 'user' }).populate('currentPlan').populate('recommendation.plan');
         res.json(members);
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
@@ -44,7 +44,7 @@ router.get('/:id', verifyToken, checkRole(['admin', 'staff']), async (req, res) 
 // @desc    Register a new member
 // @access  Admin/Staff
 router.post('/', verifyToken, checkRole(['admin', 'staff']), async (req, res) => {
-    const { firstName, lastName, email, firebaseUid, planId, phone, address } = req.body;
+    const { firstName, lastName, email, firebaseUid, planId, phone, address, role } = req.body;
     try {
         if (!planId) {
             return res.status(400).json({ message: 'Plan ID is required' });
@@ -65,6 +65,8 @@ router.post('/', verifyToken, checkRole(['admin', 'staff']), async (req, res) =>
             personalInfo: { firstName, lastName, phone, address },
             email,
             firebaseUid,
+            role: role || 'user',
+            createdBy: req.member._id,
             currentPlan: planId,
             status: 'Active',
             startDate,

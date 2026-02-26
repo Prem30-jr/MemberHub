@@ -6,8 +6,10 @@ import {
 } from '@heroicons/react/24/outline';
 import api from '../services/api';
 import { Button, Input, Modal, Select } from '../components/UI';
+import { useAuth } from '../context/AuthContext';
 
 const Plans = () => {
+    const { role } = useAuth();
     const [plans, setPlans] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,10 +91,12 @@ const Plans = () => {
                     <h3 className="text-2xl font-bold text-slate-800">Subscription Plans</h3>
                     <p className="text-slate-500">Configure and manage your tiered offerings</p>
                 </div>
-                <Button onClick={() => handleOpenModal()} className="flex items-center">
-                    <PlusIcon className="w-5 h-5 mr-2" />
-                    Create New Plan
-                </Button>
+                {role === 'admin' && (
+                    <Button onClick={() => handleOpenModal()} className="flex items-center">
+                        <PlusIcon className="w-5 h-5 mr-2" />
+                        Create New Plan
+                    </Button>
+                )}
             </div>
 
             {loading ? (
@@ -106,14 +110,16 @@ const Plans = () => {
                                     <span className="text-sm font-semibold text-primary bg-primary/10 px-3 py-1 rounded-full uppercase tracking-wider">
                                         {plan.name}
                                     </span>
-                                    <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleOpenModal(plan)} className="p-2 text-slate-400 hover:text-primary transition-colors hover:bg-slate-50 rounded-lg">
-                                            <PencilSquareIcon className="w-5 h-5" />
-                                        </button>
-                                        <button onClick={() => handleDelete(plan._id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors hover:bg-slate-50 rounded-lg">
-                                            <TrashIcon className="w-5 h-5" />
-                                        </button>
-                                    </div>
+                                    {role === 'admin' && (
+                                        <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => handleOpenModal(plan)} className="p-2 text-slate-400 hover:text-primary transition-colors hover:bg-slate-50 rounded-lg">
+                                                <PencilSquareIcon className="w-5 h-5" />
+                                            </button>
+                                            <button onClick={() => handleDelete(plan._id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors hover:bg-slate-50 rounded-lg">
+                                                <TrashIcon className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex items-baseline mb-2">
                                     <span className="text-4xl font-bold text-slate-900">${plan.price}</span>
@@ -122,14 +128,17 @@ const Plans = () => {
                             </div>
 
                             <div className="p-8 flex-1">
+                                <p className="text-sm text-slate-600 leading-relaxed font-semibold mb-2">Features:</p>
                                 <p className="text-sm text-slate-600 leading-relaxed">{plan.description}</p>
                             </div>
 
-                            <div className="p-8 bg-slate-50/50 border-t border-slate-100 mt-auto">
-                                <Button onClick={() => handleOpenModal(plan)} variant="secondary" size="md" className="w-full">
-                                    Update Plan Details
-                                </Button>
-                            </div>
+                            {role === 'admin' && (
+                                <div className="p-8 bg-slate-50/50 border-t border-slate-100 mt-auto">
+                                    <Button onClick={() => handleOpenModal(plan)} variant="secondary" size="md" className="w-full">
+                                        Update Plan Details
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )) : (
                         <div className="col-span-full py-20 text-center bg-white rounded-[2rem] border-2 border-dashed border-slate-200">
