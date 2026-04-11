@@ -13,7 +13,7 @@ const Login = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [isRegistering, setIsRegistering] = useState(false);
-    const { loginWithGoogle, loginCustom, registerUser, user, role } = useAuth();
+    const { loginWithGoogle, loginCustom, user, role } = useAuth();
     const navigate = useNavigate();
 
     useEffect(() => {

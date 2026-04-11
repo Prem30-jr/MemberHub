@@ -60,7 +60,6 @@ const Dashboard = () => {
                 const totalRevenue = payments
                     .filter(p => p.status === 'Paid')
                     .reduce((sum, p) => sum + p.amount, 0);
-                const overduePayments = payments.filter(p => p.status === 'Overdue').length;
 
                 // AI Category distribution
                 const regularPayers = members.filter(m => m.payerCategory === 'Regular').length;
